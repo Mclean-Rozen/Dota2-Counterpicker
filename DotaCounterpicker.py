@@ -4,6 +4,77 @@ from bs4 import BeautifulSoup as bs
 import pandas as pd
 from IPython.display import display
 headers = {'User-Agent': 'Mozilla/5.0'}
+
+def main():
+    enemyComp = userInput()
+    counterpicks = team_matchup(enemyComp)
+    counterpicks = team_matchup_percentage(counterpicks)
+    display(counterpicks)
+
+def hero_matchup(hero):
+    hero = hero.lower()
+    heroHyphen = hero.replace(' ','-')
+    url = "https://www.dotabuff.com/heroes/" + heroHyphen + "/counters"
+    response = rq.get(url, headers=headers)
+    if response.status_code != 200:
+        print("Request unsuccessful: " + str(response.status_code))
+        return []
+    page = bs(response.content, 'lxml')
+    table = page.find('table', class_='sortable').find('tbody').findAll('tr')
+    counters = []
+    for i in table:
+        counter = i.find('a', class_='link-type-hero').get_text()
+        advantage = float(i.findNext('td').findNext('td').findNext('td').get('data-value')) / 100
+        winrate = float(i.findNext('td').findNext('td').findNext('td').findNext('td').get('data-value')) / 100
+        counters.append([counter, advantage])
+    countersDataFrame = pd.DataFrame(counters, columns=["Counter", hero.title()]).sort_values('Counter')
+    return countersDataFrame
+
+def team_matchup(enemyComp):
+    matchupData = hero_matchup(enemyComp[0])
+    for pick in enemyComp[1:]:
+        newData = hero_matchup(pick)
+        matchupData = pd.merge(matchupData, newData, on='Counter', how='inner')
+    matchupData['Average'] = matchupData.mean(axis=1)
+    matchupData = matchupData.sort_values('Average', ascending=0)
+    return matchupData
+
+def team_matchup_percentage(counterpicks):
+    for pick in counterpicks.columns[1:]:
+        counterpicks[pick] = counterpicks[pick].map("{:.2%}".format)
+    return counterpicks
+
+def userInput():
+    enemyTeam = []
+    while (len(enemyTeam)<5):
+        if(not enemyTeam):
+            print('Enter in enemy heroes:')
+            hero=input()
+            hero=checkName(hero)
+            if(hero!='none'):
+                enemyTeam.append(hero)
+        else:
+            print('Current enemy team: '+', '.join(enemyTeam).title())
+            print('Enter in enemy heroes. Enter blank if finished.')
+            hero=input()
+            if(hero==''):
+                break;
+            hero=checkName(hero)
+            if(hero!='none'):
+                enemyTeam.append(hero)
+    return enemyTeam
+
+def checkName(hero):
+    hero=hero.lower()
+    if(hero in allHeroes.keys()):
+        return hero
+    else:
+        for name in allHeroes:
+            if hero in allHeroes[name]:
+                return name
+    print('Not recognized as a hero, try again')
+    return"none"
+
 allHeroes={
     "abaddon": ["avernus"],
     "alchemist": ["razzil"],
@@ -127,80 +198,6 @@ allHeroes={
     "wraith king": ["ostarion", "skeleton king", "wk", "sk"],
     "zeus": []
 }
-
-def main():
-    enemyComp = userInput()
-    counterpicks = team_matchup(enemyComp)
-    counterpicks = team_matchup_percentage(counterpicks)
-    display(counterpicks)
-
-
-def hero_matchup(hero):
-    hero = hero.lower()
-    heroHyphen = hero.replace(' ','-')
-    url = "https://www.dotabuff.com/heroes/" + heroHyphen + "/counters"
-    response = rq.get(url, headers=headers)
-    if response.status_code != 200:
-        print("Request unsuccessful: " + str(response.status_code))
-        return []
-    page = bs(response.content, 'lxml')
-    table = page.find('table', class_='sortable').find('tbody').findAll('tr')
-    counters = []
-    for i in table:
-        counter = i.find('a', class_='link-type-hero').get_text()
-        advantage = float(i.findNext('td').findNext('td').findNext('td').get('data-value')) / 100
-        winrate = float(i.findNext('td').findNext('td').findNext('td').findNext('td').get('data-value')) / 100
-        counters.append([counter, advantage])
-    countersDataFrame = pd.DataFrame(counters, columns=["Counter", hero.title()]).sort_values('Counter')
-    return countersDataFrame
-
-
-def team_matchup(enemyComp):
-    matchupData = hero_matchup(enemyComp[0])
-    for pick in enemyComp[1:]:
-        newData = hero_matchup(pick)
-        matchupData = pd.merge(matchupData, newData, on='Counter', how='inner')
-    matchupData['Total'] = matchupData.sum(axis=1)
-    matchupData = matchupData.sort_values('Total', ascending=0)
-    return matchupData
-
-
-def team_matchup_percentage(counterpicks):
-    for pick in counterpicks.columns[1:]:
-        counterpicks[pick] = counterpicks[pick].map("{:.2%}".format)
-    return counterpicks
-
-def userInput():
-    enemyTeam = []
-    while (len(enemyTeam)<5):
-        if(not enemyTeam):
-            print('Enter in enemy heroes:')
-            hero=input()
-            hero=checkName(hero)
-            if(hero!='none'):
-                enemyTeam.append(hero)
-        else:
-            print('Current enemy team: '+', '.join(enemyTeam).title())
-            print('Enter in enemy heroes. Enter blank if finished.')
-            hero=input()
-            if(hero==''):
-                break;
-            hero=checkName(hero)
-            if(hero!='none'):
-                enemyTeam.append(hero)
-    return enemyTeam
-
-
-def checkName(hero):
-    hero=hero.lower()
-    if(hero in allHeroes.keys()):
-        return hero
-    else:
-        for name in allHeroes:
-            if hero in allHeroes[name]:
-                return name
-    print('Not recognized as a hero, try again')
-    return"none"
 
 if __name__ == "__main__":
     main()
